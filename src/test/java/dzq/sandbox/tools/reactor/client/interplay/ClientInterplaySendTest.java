@@ -1,7 +1,11 @@
 package dzq.sandbox.tools.reactor.client.interplay;
 
 
+import static java.util.stream.Collectors.toList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -9,14 +13,18 @@ import static org.mockito.Mockito.only;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dzq.sandbox.tools.reactor.client.request.body.receiver.InsertionReceiver;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
@@ -71,6 +79,7 @@ public class ClientInterplaySendTest {
 
     assertEquals(sampleMethod, result.method());
     assertEquals(sampleUrl, result.url().toString());
+    assertNull(extractEmptyBody(result));
   }
 
   @Test
@@ -97,6 +106,7 @@ public class ClientInterplaySendTest {
 
     assertEquals(sampleMethod, result.method());
     assertEquals(sampleUrl, result.url().toString());
+    assertSame(sampleBody, extractBody(result, Object.class));
   }
 
   @Test
@@ -123,6 +133,13 @@ public class ClientInterplaySendTest {
 
     assertEquals(sampleMethod, result.method());
     assertEquals(sampleUrl, result.url().toString());
+
+    var multiValueMap = (MultiValueMap<String, HttpEntity>) extractBody(result, Object.class);
+    var listByA = multiValueMap.get("A").stream().map(HttpEntity::getBody).collect(toList());
+    var listByB = multiValueMap.get("B").stream().map(HttpEntity::getBody).collect(toList());
+
+    assertThat(listByA, contains(1, 2, 3));
+    assertThat(listByB, contains(4, 5, 6));
   }
 
   public static Respondent<ClientRequest, ClientResponse> mockRespondent() {
@@ -131,5 +148,13 @@ public class ClientInterplaySendTest {
     when(respondent.act(any())).thenReturn(Mono.empty());
 
     return respondent;
+  }
+
+  private static Object extractEmptyBody(ClientRequest request) {
+    return InsertionReceiver.forEmptyBody().receiveValue(request.body());
+  }
+
+  private static <T> T extractBody(ClientRequest request, Class<T> clazz) {
+    return InsertionReceiver.forClass(clazz).receiveValue(request.body());
   }
 }
